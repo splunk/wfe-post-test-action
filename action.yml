@@ -1,0 +1,72 @@
+#   ########################################################################
+#   Copyright 2021 Splunk Inc.
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+#   ########################################################################
+
+name: 'Post test actions for workflow engine test'
+description: 'Uploading logs, creating test report'
+inputs:
+  job-name:
+    description: 'Name for the Job'
+    required: true
+  bucket:
+    description: 'AWS S3 bucket name'
+    required: true
+  workflow-name:
+    description: 'Name of workflow'
+    required: true
+  splunk-version:
+    description: 'Splunk version for which test was executed'
+    required: true
+  test-type:
+    description: 'Type of executed tests'
+    required: true
+  directory:
+    description: 'Directory path to store logs abd test report'
+    required: true
+    default: '/tmp'
+runs:
+  using: "composite"
+  steps:
+    - name: pull artifacts from s3 bucket
+      run: |
+        echo "pulling artifacts"
+        aws s3 cp s3://${{ inputs.bucket }}/artifacts-${{ inputs.job-name }}/${{ inputs.job-name }}.tgz ${{ directory }}/
+        tar -xf ${{ directory }}/${{ inputs.job-name }}.tgz -C ${{ directory }}
+        ls -al ${{ directory }}
+        ls -al ${{ directory }}/test-results
+    - uses: actions/upload-artifact@v2.2.4
+      with:
+        name: archive splunk ${{ iputs.splunk-version }} ${{ inputs.test-type }} tests artifacts
+        path: |
+          ${{ directory }}/test-results
+    - name: pull logs from s3 bucket
+      continue-on-error: true
+      run: |
+        echo "pulling logs"
+        mkdir -p ${{ directory }}/argo-logs
+        aws s3 cp s3://${{ inputs.bucket }}/${{ inputs.workflow-name }}/ ${{ directory }}/argo-logs/ --recursive
+    - uses: actions/upload-artifact@v2.2.4
+      with:
+        name: archive splunk ${{ iputs.splunk-version }} ${{ inputs.test-type }} tests logs
+        path: |
+          ${{ directory }}/argo-logs
+    - name: Test Report
+      uses: dorny/test-reporter@v1
+      continue-on-error: true
+      if: success() || failure()    # run this step even if previous step failed
+      with:
+        name: splunk ${{ iputs.splunk-version }} ${{ inputs.test-type }} test report
+        path: '${{ directory }}/test-results/*.xml'
+        reporter: java-junit
