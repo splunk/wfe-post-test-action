@@ -26,12 +26,6 @@ inputs:
   workflow-name:
     description: 'Name of workflow'
     required: true
-  splunk-version:
-    description: 'Splunk version for which test was executed'
-    required: true
-  test-type:
-    description: 'Type of executed tests'
-    required: true
   directory:
     description: 'Directory path to store logs abd test report'
     required: true
@@ -42,31 +36,14 @@ runs:
     - name: pull artifacts from s3 bucket
       run: |
         echo "pulling artifacts"
-        aws s3 cp s3://${{ inputs.bucket }}/artifacts-${{ inputs.job-name }}/${{ inputs.job-name }}.tgz ${{ directory }}/
-        tar -xf ${{ directory }}/${{ inputs.job-name }}.tgz -C ${{ directory }}
-        ls -al ${{ directory }}
-        ls -al ${{ directory }}/test-results
-    - uses: actions/upload-artifact@v2.2.4
-      with:
-        name: archive splunk ${{ iputs.splunk-version }} ${{ inputs.test-type }} tests artifacts
-        path: |
-          ${{ directory }}/test-results
+        aws s3 cp s3://${{ inputs.bucket }}/artifacts-${{ inputs.job-name }}/${{ inputs.job-name }}.tgz ${{ inputs.directory }}/
+        tar -xf ${{ inputs.directory }}/${{ inputs.job-name }}.tgz -C ${{ inputs.directory }}
+        ls -al ${{ inputs.directory }}
+        ls -al ${{ inputs.directory }}/test-results
+      shell: bash
     - name: pull logs from s3 bucket
-      continue-on-error: true
       run: |
         echo "pulling logs"
-        mkdir -p ${{ directory }}/argo-logs
-        aws s3 cp s3://${{ inputs.bucket }}/${{ inputs.workflow-name }}/ ${{ directory }}/argo-logs/ --recursive
-    - uses: actions/upload-artifact@v2.2.4
-      with:
-        name: archive splunk ${{ iputs.splunk-version }} ${{ inputs.test-type }} tests logs
-        path: |
-          ${{ directory }}/argo-logs
-    - name: Test Report
-      uses: dorny/test-reporter@v1
-      continue-on-error: true
-      if: success() || failure()    # run this step even if previous step failed
-      with:
-        name: splunk ${{ iputs.splunk-version }} ${{ inputs.test-type }} test report
-        path: '${{ directory }}/test-results/*.xml'
-        reporter: java-junit
+        mkdir -p ${{ inputs.directory }}/argo-logs
+        aws s3 cp s3://${{ inputs.bucket }}/${{ inputs.workflow-name }}/ ${{ inputs.directory }}/argo-logs/ --recursive
+      shell: bash
